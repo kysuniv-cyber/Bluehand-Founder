@@ -60,16 +60,24 @@ for region_alias, region_full_name in regions.items():
                     break
 
                 for item in items:
-                    # 좌표 보정
+                    # 좌표값 가져오기
                     val1 = float(item.get('mapLaeVal', 0) or 0)
                     val2 = float(item.get('mapLoeVal', 0) or 0)
 
+                    # 1. 좌표가 0이면 건너뛰기 (continue 필수!)
+                    if val1 == 0 or val2 == 0:
+                        print(f"   ⚠️ 좌표 누락된 데이터는 제외: {item.get('asnNm')}")
+                        continue  # 👈 이게 있어야 밑으로 안 내려가고 다음 루프로 넘어갑니다.
+
+                    # 2. 좌표 보정 (경도 127... 위도 37...)
                     if val1 > 100:
                         lon, lat = val1, val2
                     else:
                         lon, lat = val2, val1
+
                     # f12 개발자 도구 까서 확인한 것 !
                     info = {
+                        # --- 기본 정보 ---
                         'region': region_alias,
                         'name': item.get('asnNm'),
                         'type': item.get('apimCeqPlntNm'),
@@ -77,8 +85,22 @@ for region_alias, region_full_name in regions.items():
                         'phone': item.get('repnTn', '').strip(),
                         'latitude': lat,
                         'longitude': lon,
-                        'is_ev': 1 if item.get('spcialSrvC002') == 'Y' else 0,
-                        'is_excellent': 1 if item.get('xclFirmYn') == 'Y' else 0
+
+                        # 1. 친환경차 관련
+                        'is_ev': 1 if item.get('spcialSrvH003', '').strip() == 'Y' else 0,  # 전기차 수리
+                        'is_ev_tech': 1 if item.get('spcialSrvC002', '').strip() == 'Y' else 0,
+                        # 전동차 기술력 우수 (is_excellent)
+                        'is_hydrogen': 1 if item.get('spcialSrvH001', '').strip() == 'Y' else 0,  # 수소 전기차 수리
+                        # 2. 차체/도장 및 특수 수리
+                        'is_frame': 1 if item.get('spcialSrvC001', '').strip() == 'Y' else 0,  # 차체/도장 수리 인증
+                        'is_al_frame': 1 if item.get('spcialSrvC006', '').strip() == 'Y' else 0,  # 알루미늄 프레임 수리
+                        'is_n_line': 1 if item.get('spcialSrvC009', '').strip() == 'Y' else 0,  # 고성능 N 모델 수리
+                        # 3. 상용차(트럭/버스) 관련
+                        'is_commercial_mid': 1 if item.get('spcialSrvC010', '').strip() == 'Y' else 0,  # 중형 상용 수리
+                        'is_commercial_big': 1 if item.get('spcialSrvC011', '').strip() == 'Y' else 0,  # 대형 상용 수리
+                        'is_commercial_ev': 1 if item.get('spcialSrvC012', '').strip() == 'Y' else 0,  # 상용 전동차 수리
+                        # 4. CS 우수
+                        'is_cs_excellent': 1 if item.get('spcialSrvC003', '').strip() == 'Y' else 0,  # CS 우수 업체
                     }
                     all_data.append(info)
 

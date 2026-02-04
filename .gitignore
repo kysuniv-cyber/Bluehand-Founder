@@ -125,5 +125,5 @@ fabric.properties
 .idea/**/azureSettings.xml
 
 .idea/
-*.csv 
+*.csv
 # End of https://www.toptal.com/developers/gitignore/api/pycharm,database,dotenv
