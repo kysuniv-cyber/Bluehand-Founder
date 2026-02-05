@@ -6,6 +6,7 @@ import folium
 from folium.plugins import LocateControl
 from streamlit_folium import st_folium
 
+
 st.title("현재 사용자 위치")
 
 # 사용자 위치 지도 출력
@@ -24,3 +25,8 @@ st_folium(m, width=1000, height=600)
 m = folium.Map([41.97, 2.81])
 
 st.title("서울권 센터")
+
+
+
+
+
