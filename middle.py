@@ -301,7 +301,7 @@ with st.sidebar:
 
     selected_region = st.selectbox("🗺️ 지역 선택 (시/도)", ["(전체)"] + region_list)
     st.write("---")
-    st.info("🛠️ 서비스 옵션")
+    st.subheader("🛠️ 서비스 옵션")
     selected_labels = st.multiselect("필요한 정비 항목", options=list(FILTER_OPTIONS.values()), default=[])
     reverse_map = {v: k for k, v in FILTER_OPTIONS.items()}
     selected_service_cols = [reverse_map[label] for label in selected_labels]
