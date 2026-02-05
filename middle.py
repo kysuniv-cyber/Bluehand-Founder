@@ -228,7 +228,7 @@ def add_markers_to_map(m, rows, user_lat=None, user_lng=None):
         dist_str = "⚠️ 권한 필요"
         if user_lat and user_lng:
             d = haversine(user_lng, user_lat, lng, lat)
-            if d is not None: dist_str = f"🚶 {int(d * 1000)}m" if d < 1 else f"🚗 {d:.1f}km"
+            if d is not None: dist_str = f"🚶 {int(d * 1000)}m" if d < 1 else f"내 위치로부터 🚗 {d:.1f}km"
 
         # 팝업 내용 구성 (HTML)
         services_html = format_services_html(row)
@@ -384,13 +384,24 @@ if should_search:
     else:
         st.subheader(f"🏢 검색 결과: {len(data_list)}개")
 
-    # 지도 중심 좌표 설정 (우선순위: 사용자 위치 -> 검색 결과 첫 번째 지점 -> 강남역)
-    map_center = [37.4979, 127.0276]  # 기본값: 강남역
+    # [수정됨] 지도 중심 좌표 설정 로직 (기존 로직 변경)
+    # 기존 주석: 지도 중심 좌표 설정 (우선순위: 사용자 위치 -> 검색 결과 첫 번째 지점 -> 강남역)
+    # 수정된 우선순위: 1. 검색 결과 첫 번째 지점 -> 2. 사용자 위치 -> 3. 강남역(기본값)
+    map_center = [37.4979, 127.0276]  # 3순위: 기본값 (강남역)
 
-    if user_lat:
+    # 1순위 체크: 검색된 데이터(data_list)가 있고 위/경도 정보가 존재하는 경우
+    if data_list and data_list[0].get('latitude'):
+        try:
+            # 첫 번째 검색 결과의 좌표를 실수형으로 변환하여 중심점으로 설정
+            map_center = [float(data_list[0]['latitude']), float(data_list[0]['longitude'])]
+        except (ValueError, TypeError):
+            # 만약 좌표 데이터가 손상되어 변환 실패 시, 사용자 위치가 있다면 사용 (2순위)
+            if user_lat:
+                map_center = [user_lat, user_lng]
+
+    # 2순위 체크: 검색 결과가 없거나 좌표가 없을 때, 사용자 위치가 있다면 중심으로 설정
+    elif user_lat:
         map_center = [user_lat, user_lng]
-    elif data_list and data_list[0].get('latitude'):
-        map_center = [float(data_list[0]['latitude']), float(data_list[0]['longitude'])]
 
     # 지도 생성 및 마커 추가
     m = folium.Map(location=map_center, zoom_start=13)
