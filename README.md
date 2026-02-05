@@ -26,14 +26,14 @@
 ## ⚙️ 설치 및 실행 방법
 
 ### 1. 환경 설정 및 패키지 설치
-
 ```bash
 # 필수 라이브러리 설치
 pip install streamlit mysql-connector-python pandas folium streamlit-folium streamlit-js-eval
+```
 
 2. 데이터베이스 설정 (MySQL)
 프로젝트 실행을 위해 MySQL에 데이터베이스와 테이블이 생성되어 있어야 합니다.
-
+```sql
 CREATE DATABASE IF NOT EXISTS bluehands_db;
 USE bluehands_db;
 
@@ -59,11 +59,11 @@ CREATE TABLE bluehands (
     is_n_line TINYINT(1) DEFAULT 0,    -- N-Line 전담
     FOREIGN KEY (region_id) REFERENCES regions(id)
 );
-
+```
 3. DB 연결 정보 수정
 소스 코드 내의 DB_CONFIG 딕셔너리를 본인의 MySQL 환경에 맞게 수정해주세요.
 
-# main.py (또는 해당 파일)
+### main.py (또는 해당 파일의 내용 수정)
 DB_CONFIG = {
     "host": "localhost",
     "user": "root",           # 본인의 MySQL 유저명
@@ -73,9 +73,12 @@ DB_CONFIG = {
 }
 
 4. 애플리케이션 실행
+```bash
 streamlit run final.py # 최종 실행 파일은 final.py 입니다.
+ ```
 
 📂 프로젝트 구조
 📦 bluehands-finder
- ┣ 📜 main.py          # 메인 애플리케이션 소스 코드
+ ┣ 📜 final.py          # 메인 애플리케이션 소스 코드
+ ┣ 📜 elses             #
  ┗ 📜 README.md        # 프로젝트 설명서
