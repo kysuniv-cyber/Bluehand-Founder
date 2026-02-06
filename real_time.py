@@ -10,6 +10,8 @@ import streamlit.components.v1 as components  # 커스텀 HTML이나 JavaScript(
 from math import radians, cos, sin, asin, sqrt  # 두 지점(위도, 경도) 사이의 거리를 계산하는 하버사인(Haversine) 공식에 필요한 수학 함수들
 from streamlit_js_eval import get_geolocation  # 웹 브라우저의 GPS API를 호출하여 사용자의 현재 위도/경도를 가져오는 라이브러리
 from dotenv import load_dotenv  # .env 파일에 저장된 민감한 정보(DB 비밀번호, API 키 등)를 환경변수로 로드하여 보안을 유지하는 라이브러리
+import time  # ✅ 추가
+
 
 # .env 파일에서 환경 변수(DB 접속 정보 등)를 로드합니다.
 load_dotenv()
@@ -205,7 +207,7 @@ PAGE_SIZE = 5
 
 # 최근 클릭한 센터(최대 5개) 저장
 if "clicked_centers" not in st.session_state:
-    st.session_state.clicked_centers = {} # [{"id":.., "name":..}, ...]
+    st.session_state.clicked_centers = {}  # {bluehands_id: {"id":.., "name":.., "count":..}}
 
 
 # -----------------------------------------------------------------------------
@@ -616,22 +618,36 @@ with st.sidebar:
         if st.button("검색", type="primary", use_container_width=True):  # Primary 타입으로 강조
             if search_query: scroll_down()
 
-    st.write("---")
-    st.markdown("### 📌 많이 클릭한 센터 TOP 5")
 
-    if not st.session_state.clicked_centers:
-        st.caption("지도에서 핀을 클릭하면 여기에 표시됩니다.")
-    else:
-        sorted_centers = sorted(
-            st.session_state.clicked_centers.values(),
-            key=lambda x: x["count"],
-            reverse=True
-        )
+# -----------------------------
+# 📌 많이 클릭한 센터 TOP 5 (검색창 아래에 고정 표시)
+# - st_folium 클릭 이벤트는 아래쪽(지도 렌더링 이후)에서 처리되므로,
+#   여기서는 placeholder를 만들어두고, 클릭 처리 후 같은 placeholder를 다시 그려서 '즉시' 갱신합니다.
+# -----------------------------
+    top5_placeholder = st.empty()
 
-        top5 = sorted_centers[:5]
+    def render_top5(ph):
+        with ph.container():
+            st.write("---")
+            st.markdown("### 📌 많이 클릭한 센터 TOP 5")
 
-        for i, item in enumerate(top5, 1):
-            st.write(f"{i}. {item['name']} ({item['count']}회)")
+            if not st.session_state.clicked_centers:
+                st.caption("지도에서 핀을 클릭하면 여기에 표시됩니다.")
+                return
+
+            sorted_centers = sorted(
+                st.session_state.clicked_centers.values(),
+                key=lambda x: x.get("count", 0),
+                reverse=True
+            )
+
+            top5 = sorted_centers[:5]
+            for i, item in enumerate(top5, 1):
+                st.write(f"{i}. {item.get('name', '지점')} ({item.get('count', 0)}회)")
+
+    # 첫 렌더 (클릭 처리 전 상태)
+    render_top5(top5_placeholder)
+
 
 
 # (4) 결과 조회 및 화면 표시
@@ -698,6 +714,9 @@ if should_search:
                 }
             else:
                 st.session_state.clicked_centers[cid]["count"] += 1
+            # ✅ TOP5 즉시 갱신
+            render_top5(top5_placeholder)
+
 
     # 하단에 페이징된 테이블 표시 (함수 내부에서 stCard 적용됨)
     if data_list:
