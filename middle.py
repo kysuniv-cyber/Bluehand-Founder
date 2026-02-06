@@ -1,29 +1,176 @@
-import os
-import math
-import streamlit as st
-import mysql.connector
-import pandas as pd
-import folium
-from folium.plugins import LocateControl
-from streamlit_folium import st_folium
-import streamlit.components.v1 as components
-from math import radians, cos, sin, asin, sqrt
-from streamlit_js_eval import get_geolocation
-from dotenv import load_dotenv
+import os  # 운영체제(OS)와 상호작용하기 위한 라이브러리 (환경변수 값을 읽어올 때 사용)
+import math  # 기본적인 수학 계산을 위한 파이썬 내장 라이브러리
+import streamlit as st  # 쉽고 빠르게 웹 애플리케이션을 만들기 위한 Python 프레임워크 (UI/UX 구성의 핵심)
+import mysql.connector  # Python 코드와 원격 MySQL 데이터베이스를 연결해주는 커넥터 (SQL 실행 및 데이터 조회)
+import pandas as pd  # 데이터 조작 및 분석을 위한 라이브러리 (DB에서 가져온 데이터를 DataFrame 표 형태로 변환)
+import folium  # 지리 정보 시각화를 위한 지도 라이브러리 (지도 생성, 마커 표시 등)
+from folium.plugins import LocateControl  # 지도 상에 '현재 내 위치 찾기' 버튼 기능을 추가하는 플러그인
+from streamlit_folium import st_folium  # Folium으로 만든 지도를 Streamlit 웹 화면에 렌더링(표시)하기 위한 전용 컴포넌트
+import streamlit.components.v1 as components  # 커스텀 HTML이나 JavaScript(화면 스크롤 등)를 실행하기 위한 Streamlit 컴포넌트
+from math import radians, cos, sin, asin, sqrt  # 두 지점(위도, 경도) 사이의 거리를 계산하는 하버사인(Haversine) 공식에 필요한 수학 함수들
+from streamlit_js_eval import get_geolocation  # 웹 브라우저의 GPS API를 호출하여 사용자의 현재 위도/경도를 가져오는 라이브러리
+from dotenv import load_dotenv  # .env 파일에 저장된 민감한 정보(DB 비밀번호, API 키 등)를 환경변수로 로드하여 보안을 유지하는 라이브러리
 
 # .env 파일에서 환경 변수(DB 접속 정보 등)를 로드합니다.
 load_dotenv()
 
 # -----------------------------------------------------------------------------
-# 1. 설정 및 옵션 정의
+# 1. 설정 및 디자인 테마 적용
 # -----------------------------------------------------------------------------
 # Streamlit 페이지의 기본 설정을 초기화합니다. (브라우저 탭 제목, 아이콘, 레이아웃 등)
 st.set_page_config(
-    page_title="블루핸즈 찾기",
+    page_title="현대자동차 블루핸즈 찾기",
     page_icon="🚘",
     layout="wide",  # 화면을 넓게 사용
     initial_sidebar_state="expanded",  # 사이드바를 기본적으로 펼침
 )
+
+# [CSS] 전체 디자인 커스텀 (폰트, 여백, 카드 스타일, 페이지네이션 정렬 등)
+st.markdown("""
+<style>
+    /* 1. 전체 폰트 및 기본 스타일 설정 (Pretendard 폰트 사용) */
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    html, body, [class*="css"] {
+        font-family: 'Pretendard', sans-serif;
+    }
+
+    /* 2. 메인 헤더 그라데이션 배너 디자인 */
+    .main-header {
+        background: linear-gradient(135deg, #002c5f 0%, #0054a6 100%); /* 현대차 브랜드 블루 계열 */
+        padding: 2.5rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        text-align: center;
+        color: white;
+        box-shadow: 0 4px 12px rgba(0, 44, 95, 0.15);
+    }
+    .main-header h1 {
+        font-weight: 700;
+        margin: 0;
+        font-size: 2rem;
+        color: white !important;
+    }
+    .main-header p {
+        font-size: 1rem;
+        opacity: 0.9;
+        margin-top: 0.5rem;
+        color: #e0f2fe !important;
+    }
+
+    /* 3. 카드형 레이아웃 스타일 (지도, 테이블 등을 감싸는 박스) */
+    .stCard {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        margin-bottom: 1.5rem;
+    }
+
+    /* 4. 버튼 스타일 통일 (검색, 페이징 버튼) */
+    div.stButton > button {
+        background-color: white;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        font-size: 14px;
+        transition: all 0.2s;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    /* 검색 버튼(파란색 강조) 스타일 */
+    div[data-testid="column"] button[kind="primary"] {
+        background-color: #0054a6;
+        color: white;
+        border: none;
+    }
+    div.stButton > button:hover {
+        border-color: #0054a6;
+        color: #0054a6;
+        background-color: #f9fafb;
+    }
+
+    /* 5. 페이지네이션 라디오 버튼 컨테이너 (중앙 정렬, 줄바꿈 방지) */
+    div[role="radiogroup"] {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap !important; /* 줄바꿈 절대 금지 */
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+    }
+
+    /* 6. 라디오 버튼의 동그라미(Input) 숨기기 */
+    div[role="radiogroup"] label > div:first-child { 
+        display: none !important; 
+    }
+
+    /* 7. 숫자 버튼 스타일 (네모난 버튼 형태) */
+    div[role="radiogroup"] label {
+        background: white !important;
+        border: 1px solid #d1d5db !important;
+        border-radius: 6px !important;
+        width: 36px !important;  /* 너비 고정 */
+        height: 36px !important; /* 높이 고정 */
+        padding: 0 !important;
+        margin: 0 !important;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    /* 8. 숫자 텍스트 정렬 (Flexbox로 수직/수평 중앙 정렬) - [수정됨: 정중앙 보정] */
+    div[role="radiogroup"] label > div {
+        color: #4b5563 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        text-align: center !important;
+        width: 100% !important;
+        height: 100% !important;
+
+        /* Flexbox로 텍스트 정중앙 배치 */
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+
+        margin: 0 !important;
+        padding: 0 !important;
+        padding-bottom: 1px !important; /* 미세 조정: 폰트 베이스라인 보정 */
+        line-height: normal !important;
+    }
+
+    /* 9. 마우스 올렸을 때 (Hover) */
+    div[role="radiogroup"] label:hover {
+        border-color: #0054a6 !important;
+        color: #0054a6 !important;
+        background-color: #f0f7ff !important;
+    }
+
+    /* 10. 선택된 버튼 스타일 (Active) */
+    div[role="radiogroup"] label[data-baseweb="radio"] {
+        background-color: #0054a6 !important;
+        border-color: #0054a6 !important;
+    }
+    div[role="radiogroup"] label[data-baseweb="radio"] > div {
+        color: white !important;
+        font-weight: 700 !important;
+    }
+
+    /* 11. 좌우 이동 버튼 높이 맞춤 */
+    div[data-testid="column"] .stButton button {
+        height: 36px !important;
+        min-height: 36px !important;
+        padding: 0px 12px !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # 필터 옵션 정의: DB 컬럼명(key)과 화면에 보여줄 텍스트(value) 매핑
 FILTER_OPTIONS = {
@@ -50,134 +197,14 @@ DB_CONFIG = {
 PAGE_SIZE = 5
 
 
-def _service_text_from_row(row: dict) -> str:
-    """
-    DB에서 가져온 행(row) 데이터 중 값이 1인 필터 항목만 추출하여
-    화면에 보여줄 문자열(예: 전기차 전담 · 우수 협력점)로 변환합니다.
-    """
-    labels = [label for col, label in FILTER_OPTIONS.items() if row.get(col) == 1]
-    return " · ".join(labels)
-
-
-def render_hy_table_page(rows_page: list[dict]):
-    """
-    데이터 리스트를 받아 HTML 테이블 형태로 렌더링하는 함수입니다.
-    Streamlit 기본 데이터프레임보다 더 예쁜 디자인을 위해 HTML/CSS를 직접 사용합니다.
-    """
-    # 테이블 스타일 정의 (CSS)
-    css = """
-    <style>
-      table.hy { width:100%; border-collapse:collapse; table-layout:fixed; }
-      table.hy thead th{
-        background:#0b3b68; color:#fff; padding:12px 10px; text-align:center;
-        font-weight:800; border:1px solid #ffffff33; font-size:14px;
-      }
-      table.hy tbody td{
-        border:1px solid #e6e6e6; padding:14px 12px; vertical-align:middle;
-        font-size:14px; background:#fff; word-break:break-word;
-      }
-      .c-name{ width:22%; text-align:center; font-weight:800; }
-      .c-addr{ width:48%; text-align:center; }
-      .c-phone{ width:15%; text-align:center; }
-      .c-svc{ width:15%; text-align:center; }
-      .svc{ font-weight:800; color:#0b3b68; }
-      .muted{ color:#777; }
-    </style>
-    """
-
-    def s(x): return "" if x is None else str(x)  # None 값을 빈 문자열로 처리하는 헬퍼
-
-    # 각 행 데이터를 HTML <tr> 태그로 변환
-    trs = []
-    for r in rows_page:
-        name = s(r.get("name"))
-        addr = s(r.get("address"))
-        phone = s(r.get("phone"))
-        svc = _service_text_from_row(r)
-        svc_html = f'<span class="svc">{svc}</span>' if svc else '<span class="muted">-</span>'
-
-        trs.append(f"""
-          <tr>
-            <td class="c-name">{name}</td>
-            <td class="c-addr">{addr}</td>
-            <td class="c-phone">{phone}</td>
-            <td class="c-svc">{svc_html}</td>
-          </tr>
-        """)
-
-    # 최종 HTML 조립
-    html = f"""
-    {css}
-    <table class="hy">
-      <thead>
-        <tr>
-          <th>업체명</th>
-          <th>주소</th>
-          <th>전화번호</th>
-          <th>서비스 옵션</th>
-        </tr>
-      </thead>
-      <tbody>
-        {''.join(trs) if trs else '<tr><td colspan="4" style="text-align:center;padding:16px;">검색 결과가 없습니다.</td></tr>'}
-      </tbody>
-    </table>
-    """
-    # Streamlit 컴포넌트로 HTML 렌더링 (높이는 데이터 개수에 따라 자동 조절)
-    components.html(html, height=120 + 62 * max(1, len(rows_page)), scrolling=False)
-
-
-def render_paginated_table(rows_all: list[dict]):
-    """
-    전체 데이터를 받아 페이지네이션(페이지 나누기) 처리를 하고 테이블을 출력하는 함수입니다.
-    """
-    total = len(rows_all)
-    # 전체 페이지 수 계산 (올림 처리)
-    total_pages = max(1, math.ceil(total / PAGE_SIZE))
-
-    # 세션 상태(session_state)에 현재 페이지 번호가 없으면 1로 초기화
-    if "page" not in st.session_state:
-        st.session_state.page = 1
-
-    # 현재 페이지 번호가 유효 범위를 벗어나지 않도록 보정 (검색 결과가 줄어들었을 때 에러 방지)
-    st.session_state.page = max(1, min(st.session_state.page, total_pages))
-    page_now = st.session_state.page
-
-    # 현재 페이지에 해당하는 데이터 슬라이싱 (start ~ end)
-    start = (page_now - 1) * PAGE_SIZE
-    end = start + PAGE_SIZE
-
-    # 슬라이싱된 데이터로 테이블 렌더링 함수 호출
-    render_hy_table_page(rows_all[start:end])
-
-    # 페이지 번호 선택 버튼 생성 (라디오 버튼 활용)
-    options = list(range(1, total_pages + 1))
-    index = options.index(page_now)  # 현재 페이지의 인덱스 찾기
-
-    # UI 레이아웃: 중앙 정렬을 위해 컬럼 분할
-    left, center, right = st.columns([1, 2, 1])
-    with center:
-        selected = st.radio(
-            label="",
-            options=options,
-            index=index,
-            horizontal=True,  # 가로로 배치
-            key="page_radio",
-        )
-
-    # 사용자가 다른 페이지를 선택하면 세션 상태 업데이트 후 화면 리로드(rerun)
-    if selected != page_now:
-        st.session_state.page = selected
-        st.rerun()
-
+# -----------------------------------------------------------------------------
+# 2. 헬퍼 함수 정의
+# -----------------------------------------------------------------------------
 
 def get_conn():
     """DB 연결 객체를 생성하여 반환합니다."""
     return mysql.connector.connect(**DB_CONFIG)
 
-
-# -----------------------------------------------------------------------------
-# 2. 유틸리티 함수
-# -----------------------------------------------------------------------------
 
 def haversine(lon1, lat1, lon2, lat2):
     """
@@ -197,8 +224,20 @@ def haversine(lon1, lat1, lon2, lat2):
 
 def scroll_down():
     """검색 버튼 클릭 시 화면을 아래로 부드럽게 스크롤하는 자바스크립트 실행"""
-    js = """<script>setTimeout(function(){window.parent.scrollTo({top: 600, behavior:'smooth'});}, 300);</script>"""
+    js = """<script>setTimeout(function(){window.parent.scrollTo({top: 500, behavior:'smooth'});}, 300);</script>"""
     components.html(js, height=0)
+
+
+def _service_text_from_row(row: dict) -> str:
+    """
+    DB에서 가져온 행(row) 데이터 중 값이 1인 필터 항목만 추출하여
+    화면에 보여줄 HTML 배지 형태로 변환합니다. (디자인 개선됨)
+    """
+    labels = [label for col, label in FILTER_OPTIONS.items() if row.get(col) == 1]
+    # 깔끔한 배지 스타일 적용
+    return "".join([
+                       f'<span class="badge" style="display:inline-block; background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:600; margin:2px; border:1px solid #dbeafe;">{l}</span>'
+                       for l in labels])
 
 
 def format_services_html(row):
@@ -206,8 +245,8 @@ def format_services_html(row):
     badges = ""
     for col, label in FILTER_OPTIONS.items():
         if row.get(col) == 1:
-            badges += f'<span style="background:#e3f2fd; color:#0d47a1; padding:2px 6px; border-radius:4px; font-size:11px; margin-right:4px;">{label}</span>'
-    return f'<div style="margin-top:5px;">{badges}</div>' if badges else ""
+            badges += f'<span style="background:#f0f7ff; color:#0054a6; padding:3px 6px; border-radius:4px; font-size:11px; margin-right:4px; border:1px solid #cce4ff; font-weight:600;">{label}</span>'
+    return f'<div style="margin-top:8px; line-height:1.6;">{badges}</div>' if badges else ""
 
 
 def add_markers_to_map(m, rows, user_lat=None, user_lng=None):
@@ -224,7 +263,7 @@ def add_markers_to_map(m, rows, user_lat=None, user_lng=None):
         addr = row.get("address", "")
         phone = row.get("phone", "")
 
-        # 사용자 위치가 있으면 거리 계산하여 표시
+        # 사용자 위치가 있으면 거리 계산하여 표시 -> 하버사인 이용
         dist_str = "⚠️ 권한 필요"
         if user_lat and user_lng:
             d = haversine(user_lng, user_lat, lng, lat)
@@ -233,13 +272,13 @@ def add_markers_to_map(m, rows, user_lat=None, user_lng=None):
         # 팝업 내용 구성 (HTML)
         services_html = format_services_html(row)
         html = f"""
-        <div style="width:240px; font-family:sans-serif;">
-            <h4 style="margin:0; color:#0054a6;">{name}</h4>
-            <p style="font-size:12px; margin:5px 0;">{addr}</p>
+        <div style="width:240px; font-family:'Pretendard', sans-serif;">
+            <h4 style="margin:0; color:#0054a6; font-size:16px;">{name}</h4>
+            <p style="font-size:12px; margin:5px 0; color:#555;">{addr}</p>
             {services_html}
-            <p style="font-size:12px; margin:5px 0; color:blue;">📞 {phone}</p>
-            <div style="border-top:1px solid #ddd; padding-top:5px; margin-top:5px;">
-                <span style="color:red; font-weight:bold; font-size:13px;">{dist_str}</span>
+            <p style="font-size:13px; margin:8px 0; color:#333; font-weight:bold;">📞 {phone}</p>
+            <div style="border-top:1px solid #eee; padding-top:5px; margin-top:5px;">
+                <span style="color:#e11d48; font-weight:bold; font-size:12px;">{dist_str}</span>
             </div>
         </div>
         """
@@ -250,7 +289,171 @@ def add_markers_to_map(m, rows, user_lat=None, user_lng=None):
 
 
 # -----------------------------------------------------------------------------
-# 3. DB 조회 함수
+# 3. 테이블 및 페이지네이션 렌더링 함수 (디자인 및 정렬 개선됨)
+# -----------------------------------------------------------------------------
+
+def render_hy_table_page(rows_page: list[dict]):
+    """
+    데이터 리스트를 받아 HTML 테이블 형태로 렌더링하는 함수입니다.
+    CSS를 사용하여 깔끔하고 현대적인 테이블 디자인을 적용했습니다.
+    [수정] 모든 컬럼의 텍스트를 가운데 정렬(text-align: center)로 변경했습니다.
+    """
+    # 테이블 디자인 (CSS)
+    css = """
+    <style>
+      table.hy { 
+        width:100%; border-collapse:separate; border-spacing:0; 
+        border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; 
+        margin-bottom: 10px;
+      }
+      table.hy thead th {
+        background:#f3f4f6; color:#1f2937; padding:14px 12px; text-align:center;
+        font-weight:700; font-size:15px; border-bottom:1px solid #e5e7eb;
+      }
+      table.hy tbody td {
+        border-bottom:1px solid #f3f4f6; padding:14px 12px; vertical-align:middle;
+        font-size:14px; color:#4b5563; background:#fff;
+      }
+      table.hy tbody tr:last-child td { border-bottom: none; }
+
+      /* [수정] 모든 컬럼 text-align: center 적용 */
+      .c-name { width:20%; font-weight:700; color:#111827; text-align:center; }
+      .c-addr { width:45%; text-align:left; line-height:1.4; } /* 주소는 길어서 왼쪽 정렬 유지 */
+      .c-phone { width:15%; text-align:center; color:#0054a6; font-weight:600; }
+      .c-svc { width:20%; text-align:center; } /* [수정] 서비스 옵션도 가운데 정렬 */
+
+      .muted { color:#9ca3af; font-size:13px; text-align:center; display:block; }
+    </style>
+    """
+
+    def s(x):
+        return "" if x is None else str(x)
+
+    trs = []
+    for r in rows_page:
+        name = s(r.get("name"))
+        addr = s(r.get("address"))
+        phone = s(r.get("phone"))
+        svc_html = _service_text_from_row(r)
+        if not svc_html: svc_html = '<span class="muted">-</span>'
+
+        trs.append(f"""
+          <tr>
+            <td class="c-name">{name}</td>
+            <td class="c-addr">{addr}</td>
+            <td class="c-phone">{phone}</td>
+            <td class="c-svc">{svc_html}</td>
+          </tr>
+        """)
+
+    html = f"""
+    {css}
+    <table class="hy">
+      <thead>
+        <tr>
+          <th>지점명</th>
+          <th>주소</th>
+          <th>전화번호</th>
+          <th>서비스 옵션</th>
+        </tr>
+      </thead>
+      <tbody>
+        {''.join(trs) if trs else '<tr><td colspan="4" style="text-align:center;padding:20px;">검색 결과가 없습니다.</td></tr>'}
+      </tbody>
+    </table>
+    """
+    # Streamlit 컴포넌트로 HTML 렌더링 (높이는 데이터 개수에 따라 자동 조절)
+    components.html(html, height=80 + 70 * max(1, len(rows_page)), scrolling=False)
+
+
+def render_paginated_table(rows_all: list[dict]):
+    """
+    [디자인 최종_완성]
+    - 양옆 여백을 줄여 버튼 사라짐 현상 해결
+    - 버튼과 숫자의 높이/색상을 통일하여 난잡해 보이지 않게 함
+    """
+    # 1. 페이지 계산 로직
+    total = len(rows_all)
+    total_pages = max(1, math.ceil(total / PAGE_SIZE))
+
+    if "page" not in st.session_state:
+        st.session_state.page = 1
+
+    st.session_state.page = max(1, min(st.session_state.page, total_pages))
+    page_now = st.session_state.page
+
+    # 2. 데이터 슬라이싱 및 테이블 출력
+    start_idx = (page_now - 1) * PAGE_SIZE
+    end_idx = start_idx + PAGE_SIZE
+
+    # 카드형 컨테이너 안에 테이블 렌더링
+    st.markdown('<div class="stCard">', unsafe_allow_html=True)
+    render_hy_table_page(rows_all[start_idx:end_idx])
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 3. 10개 단위 블록 계산
+    block_size = 10
+    current_block = (page_now - 1) // block_size
+    start_page = current_block * block_size + 1
+    end_page = min(start_page + block_size - 1, total_pages)
+
+    options = list(range(start_page, end_page + 1))
+
+    try:
+        current_index = options.index(page_now)
+    except ValueError:
+        current_index = 0
+        st.session_state.page = options[0]
+
+    # 4. UI 그리기: [공백(3)] [◀(1)] [숫자영역(6)] [▶(1)] [공백(3)]
+    # - 양옆 공백을 줄여서(3), 버튼이 들어갈 공간(1)을 확실히 보장함
+    st.write("")
+
+    # 페이지 정보 텍스트 (가운데 정렬)
+    from_idx = start_idx + 1
+    to_idx = min(end_idx, total)
+    st.markdown(
+        f'<p style="text-align: center; color: #6b7280; font-size: 0.85rem; margin-bottom: 8px;">'
+        f'총 {total}건 중 {from_idx}~{to_idx} (Page {page_now}/{total_pages})</p>',
+        unsafe_allow_html=True,
+    )
+
+    # 안전한 비율로 컬럼 생성 (버튼 사라짐 방지)
+    _, col_prev, col_radio, col_next, _ = st.columns([3, 1, 6, 1, 3], gap="small", vertical_alignment="center")
+
+    # (A) [◀] 버튼
+    with col_prev:
+        if start_page > 1:
+            if st.button("◀", key="prev_btn", use_container_width=True):
+                st.session_state.page = start_page - 1
+                st.rerun()
+
+    # (B) 페이지 번호 (라디오 버튼)
+    with col_radio:
+        selected = st.radio(
+            label="페이지 이동",
+            options=options,
+            index=current_index,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="page_radio",
+        )
+
+    # (C) [▶] 버튼
+    with col_next:
+        if end_page < total_pages:
+            if st.button("▶", key="next_btn", use_container_width=True):
+                st.session_state.page = end_page + 1
+                st.rerun()
+
+    # 5. 페이지 변경 시 실행
+    if selected != page_now:
+        st.session_state.page = selected
+        st.rerun()
+
+
+# -----------------------------------------------------------------------------
+# 4. DB 조회 함수
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=3600)  # 1시간 동안 캐시 유지 (지역 목록은 잘 안 바뀌므로)
 def get_regions():
@@ -319,12 +522,13 @@ def get_bluehands_data(search_text, selected_filters, region_filter):
 
 
 # -----------------------------------------------------------------------------
-# 4. 메인 UI 구성
+# 5. 메인 UI 구성
 # -----------------------------------------------------------------------------
-# 상단 타이틀 배너 (HTML)
+# 상단 타이틀 배너 (HTML + CSS 디자인 적용)
 st.markdown("""
-<div class="main-header" style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%); padding: 2rem; border-radius: 20px; margin-bottom: 2rem; text-align: center; color: white;">
-    <h1>🚘 블루핸즈 통합 검색</h1>
+<div class="main-header">
+    <h1>🚘 현대자동차 블루핸즈 찾기</h1>
+    <p>내 주변 가까운 서비스 네트워크를 쉽고 빠르게 검색하세요</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -358,17 +562,16 @@ with st.sidebar:
     selected_service_cols = [reverse_map[label] for label in selected_labels]
 
     # (3) 검색어 입력 및 버튼
-    col1, col2 = st.columns([4, 1])
+    col1, col2 = st.columns([3, 1])  # 비율 조정
     with col1:
         # 지역 선택 여부에 따라 placeholder 텍스트 변경
-        placeholder_text = f"'{selected_region}' 내 검색" if selected_region != "(전체)" else "지점명 또는 주소 검색"
-        search_query = st.text_input("검색어 입력", placeholder=placeholder_text, key="main_search")
+        placeholder_text = f"'{selected_region}' 내 검색" if selected_region != "(전체)" else "지점명 또는 주소"
+        search_query = st.text_input("검색어 입력", placeholder=placeholder_text, key="main_search",
+                                     label_visibility="collapsed")
 
     with col2:
-        st.write("")  # 버튼 높이 맞추기용 공백
-        st.write("")
         # 검색 버튼 클릭 시 스크롤 이동
-        if st.button("검색", use_container_width=True):
+        if st.button("검색", type="primary", use_container_width=True):  # Primary 타입으로 강조
             if search_query: scroll_down()
 
 # (4) 결과 조회 및 화면 표시
@@ -380,12 +583,11 @@ if should_search:
     data_list = get_bluehands_data(search_query, selected_service_cols, selected_region)
 
     if not data_list:
-        st.error("검색 결과가 없습니다.")
+        st.error("조건에 맞는 검색 결과가 없습니다.")
     else:
-        st.subheader(f"🏢 검색 결과: {len(data_list)}개")
+        st.markdown(f"##### 🏢 검색 결과: **{len(data_list)}**개의 지점을 찾았습니다.")
 
-    # [수정됨] 지도 중심 좌표 설정 로직 (기존 로직 변경)
-    # 기존 주석: 지도 중심 좌표 설정 (우선순위: 사용자 위치 -> 검색 결과 첫 번째 지점 -> 강남역)
+    # [지도 중심 좌표 설정 로직]
     # 수정된 우선순위: 1. 검색 결과 첫 번째 지점 -> 2. 사용자 위치 -> 3. 강남역(기본값)
     map_center = [37.4979, 127.0276]  # 3순위: 기본값 (강남역)
 
@@ -403,7 +605,8 @@ if should_search:
     elif user_lat:
         map_center = [user_lat, user_lng]
 
-    # 지도 생성 및 마커 추가
+    # 지도 생성 및 마커 추가 (카드형 컨테이너 적용)
+    st.markdown('<div class="stCard">', unsafe_allow_html=True)
     m = folium.Map(location=map_center, zoom_start=13)
     LocateControl().add_to(m)  # 현재 위치 찾기 버튼 추가
 
@@ -415,15 +618,18 @@ if should_search:
 
     # Streamlit에 지도 렌더링
     st_folium(m, height=500, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # 하단에 페이징된 테이블 표시
+    # 하단에 페이징된 테이블 표시 (함수 내부에서 stCard 적용됨)
     if data_list:
         df = pd.DataFrame(data_list)
         render_paginated_table(data_list)
 else:
     # 초기 진입 화면 (검색 전)
-    st.info("👈 왼쪽 상단의 사이드바에서 지역을 선택하거나, 검색어를 입력하세요.")
+    st.info("👈 왼쪽 사이드바에서 원하는 지역과 정비 옵션을 선택하거나, 지점명을 검색해보세요.")
 
     # 초기 화면 지도: 기본 위치(강남역) 보여줌
+    st.markdown('<div class="stCard">', unsafe_allow_html=True)
     m = folium.Map(location=[37.4979, 127.0276], zoom_start=13)
-    st_folium(m, height=400, use_container_width=True)
+    st_folium(m, height=450, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
