@@ -23,11 +23,11 @@ import pymysql
 MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
 MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
 MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "root")  # 로컬 테스트용. git 커밋 금지.
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "mysql")  # 로컬 테스트용. git 커밋 금지.
 MYSQL_DB = os.getenv("MYSQL_DB", "bluehands_db")
 CSV_PATH = os.getenv(
     "CSV_PATH",
-    r"C:\team_pj\Bluehand-Founde\bluehands_final_all.csv"
+    r"C:\lecture\_00_bluehands\bluehands_final_all.csv"
 )
 
 
